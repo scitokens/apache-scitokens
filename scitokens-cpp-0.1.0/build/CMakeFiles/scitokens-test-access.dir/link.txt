@@ -1,0 +1,1 @@
+/usr/bin/c++    -Wall -Werror -std=c++11   CMakeFiles/scitokens-test-access.dir/src/test_access.cpp.o  -o scitokens-test-access -rdynamic libSciTokens.so.0.0.2 -lcrypto -lcurl -lsqlite3 -Wl,-rpath,/home/yougao2/newfolder/scitokens-cpp-0.1.0/build 

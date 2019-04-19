@@ -1,0 +1,11 @@
+/home/yougao2/newfolder/scitokens-cpp-0.1.0/build/CMakeFiles/scitokens-test-access.dir
+/home/yougao2/newfolder/scitokens-cpp-0.1.0/build/CMakeFiles/rebuild_cache.dir
+/home/yougao2/newfolder/scitokens-cpp-0.1.0/build/CMakeFiles/install.dir
+/home/yougao2/newfolder/scitokens-cpp-0.1.0/build/CMakeFiles/scitokens-verify.dir
+/home/yougao2/newfolder/scitokens-cpp-0.1.0/build/CMakeFiles/scitokens-test.dir
+/home/yougao2/newfolder/scitokens-cpp-0.1.0/build/CMakeFiles/SciTokens.dir
+/home/yougao2/newfolder/scitokens-cpp-0.1.0/build/CMakeFiles/install/local.dir
+/home/yougao2/newfolder/scitokens-cpp-0.1.0/build/CMakeFiles/scitokens-list-access.dir
+/home/yougao2/newfolder/scitokens-cpp-0.1.0/build/CMakeFiles/edit_cache.dir
+/home/yougao2/newfolder/scitokens-cpp-0.1.0/build/CMakeFiles/install/strip.dir
+/home/yougao2/newfolder/scitokens-cpp-0.1.0/build/CMakeFiles/list_install_components.dir
