@@ -130,7 +130,7 @@ int ScitokenVerify(request_rec *r, const char *require_line, const void *parsed_
   // Read in the entire scitoken into memory
   auth_line = apr_table_get(r->headers_in,"Authorization");
   if(auth_line == NULL){
-    ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "Unauthorized");
+    ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "Unauthorized.");
     return AUTHZ_DENIED;
   }
   auth_scheme = ap_getword(r->pool, &auth_line, ' ');
