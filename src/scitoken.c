@@ -116,24 +116,28 @@ AP_INIT_TAKE1("alg", set_scitoken_param_alg, NULL, OR_AUTHCFG, "Enable algorithm
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~  AUTHZ HANDLERS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 
-module AP_MODULE_DECLARE_DATA auth_scitoken48_module;
+module AP_MODULE_DECLARE_DATA auth_scitoken_module;
 
 
 /**
  * The main function to verify a Scitoken
  */
-int Scitoken48Verify(request_rec *r, const char *require_line, const void *parsed_require_line) {
+int ScitokenVerify(request_rec *r, const char *require_line, const void *parsed_require_line) {
   SciToken scitoken;
   char *err_msg;
   const char *auth_line, *auth_scheme;
   
   // Read in the entire scitoken into memory
   auth_line = apr_table_get(r->headers_in,"Authorization");
+  if(auth_line == NULL){
+    ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "Unauthorized");
+    return AUTHZ_DENIED;
+  }
   auth_scheme = ap_getword(r->pool, &auth_line, ' ');
   
   // Read in configuration
   authz_scitoken_config_rec *conf = ap_get_module_config(r->per_dir_config,
-                                                      &auth_scitoken48_module);
+                                                      &auth_scitoken_module);
   int numberofissuer = conf->numberofissuer;
   char *null_ended_list[numberofissuer+1];
   
@@ -236,23 +240,23 @@ int Scitoken48Verify(request_rec *r, const char *require_line, const void *parse
 /* ~~~~~~~~~~~~~~~~~~~~~~~~  APACHE HOOKS/HANDLERS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 
 //module handler
-static const authz_provider Scitoken48_Provider =
+static const authz_provider Scitoken_Provider =
   {
-    &Scitoken48Verify,
+    &ScitokenVerify,
     NULL,
   };
 
 //hook registration function
 static void register_hooks(apr_pool_t *p)
 {
-  ap_register_auth_provider(p, AUTHZ_PROVIDER_GROUP, "Scitoken48",
+  ap_register_auth_provider(p, AUTHZ_PROVIDER_GROUP, "Scitoken",
                 AUTHZ_PROVIDER_VERSION,
-                &Scitoken48_Provider,
+                &Scitoken_Provider,
                 AP_AUTH_INTERNAL_PER_CONF);
 }
 
 //module name tags
-AP_DECLARE_MODULE(auth_scitoken48) =
+AP_DECLARE_MODULE(auth_scitoken) =
 {
   STANDARD20_MODULE_STUFF,
   create_authz_scitoken_dir_config, /* dir config creater */
