@@ -213,16 +213,17 @@ int ScitokenVerify(request_rec *r, const char *require_line, const void *parsed_
   int found = 0;
   //ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "%s",*conf->resources);
   for(int i=0; i<conf->numberofissuer; i++){
-  ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "%s",issuer_ptr);
-  ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "%s",*(conf->issuers + i));
-  if(*(issuer_ptr) == **(conf->issuers + i))
-    {
-    acl.resource = *(conf->resources + i);
-    acl.authz = *(conf->permissions + i);
-    ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "%s",*(conf->resources + i));
-    found = 1;
-    break;
-    }
+      ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "%s",issuer_ptr);
+      ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "%s",*(conf->issuers + i));
+      if(*(issuer_ptr) == **(conf->issuers + i))
+        {
+        acl.resource = *(conf->resources + i);
+        acl.authz = *(conf->permissions + i);
+        ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "%s",*(conf->resources + i));
+        ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "%s",*(conf->permissions + i));
+        found = 1;
+        break;
+        }
   }
   if(!found || acl.resource == NULL || acl.authz == NULL){
     ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "Resource/permission not found");
