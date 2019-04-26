@@ -19,6 +19,7 @@
 typedef struct {
 char** issuers;
 char** resources;
+char** permissions;
 int numberofissuer;
 } authz_scitoken_config_rec;
 
@@ -29,12 +30,15 @@ static void *create_authz_scitoken_dir_config(apr_pool_t *p, char *d)
     authz_scitoken_config_rec *conf = apr_palloc(p, sizeof(*conf));
     
     char** issuers = calloc(1, sizeof(char*));
-    char**resources = calloc(1, sizeof(char*));
+    char** resources = calloc(1, sizeof(char*));
+    char** permissions = calloc(1, sizeof(char*));
     *(issuers) = "issuer";
     *(resources) = "resources";
+    *(permissions) = "permissions";
     conf->numberofissuer = 1;
     conf->issuers = issuers;
     conf->resources = resources;
+    conf->permissions = permissions;
     return conf;
 }
 
@@ -47,23 +51,26 @@ static void *merge_auth_scitoken_dir_config(apr_pool_t *p, void *basev, void *ne
     newconf->numberofissuer = new_conf->numberofissuer ? new_conf->numberofissuer : base->numberofissuer;
     newconf->issuers = new_conf->issuers ? new_conf->issuers : base->issuers;
     newconf->resources = new_conf->resources ? new_conf->resources : base->resources;
+    newconf->permissions = new_conf->permissions ? new_conf->permissions : base->permissions;
 }
 
 /**
  * This function takes the argument "issuers" from the Apache configuration file
  * , parses the directive and sets the (module) configuration accordingly
  * Input: a string of issuers;resource seperated by ","
- *        "issuer1;resource1,issuer2;resource2...."
+ *        "issuer1;resource1;permission1,issuer2;resource2;permission2...."
  */
 static const char *set_scitoken_param_iss(cmd_parms *cmd, void *config, const char *issuersstr)
 {
     authz_scitoken_config_rec *conf = (authz_scitoken_config_rec *)config;
     char *token = strtok((char *)issuersstr, ",");
     char *res;
+    char *perm;
     char *domain;
     int counter = 0;
     char** issuers = calloc(1, sizeof(char*));
     char** resources = calloc(1, sizeof(char*));
+    char** permissions = calloc(1, sizeof(char*));
     while (token != NULL)
     {
         *(issuers+counter) = token;
@@ -71,6 +78,7 @@ static const char *set_scitoken_param_iss(cmd_parms *cmd, void *config, const ch
         counter+=1;
         issuers = realloc(issuers, (counter+1) * sizeof(char*));
         resources = realloc(resources, (counter+1) * sizeof(char*));
+        permissions = realloc(resources, (counter+1) * sizeof(char*));
     }
     conf->numberofissuer = counter;//+1;
     counter = counter - 1;
@@ -78,12 +86,15 @@ static const char *set_scitoken_param_iss(cmd_parms *cmd, void *config, const ch
     {
         domain = strtok(*(issuers+counter), ";");
         res = strtok(NULL, ";");
+        perm = strtok(NULL, ";");
         *(issuers+counter) = domain;
         *(resources+counter) = res;
+        *(permissions+counter) = perm;
         counter -= 1;
     }
     conf->issuers = issuers;
     conf->resources = resources;
+    conf->permissions = permissions;
     //ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "%s",*resources);
     return NULL;
 }
@@ -196,7 +207,7 @@ int ScitokenVerify(request_rec *r, const char *require_line, const void *parsed_
   }
   
   Acl acl;
-  acl.authz = "read";
+  acl.authz = "";
   acl.resource = "";
   //If a resource is found for the audience
   int found = 0;
@@ -207,13 +218,14 @@ int ScitokenVerify(request_rec *r, const char *require_line, const void *parsed_
   if(*(issuer_ptr) == **(conf->issuers + i))
     {
     acl.resource = *(conf->resources + i);
+    acl.authz = *(conf->permissions + i);
     ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "%s",*(conf->resources + i));
     found = 1;
     break;
     }
   }
-  if(!found){
-    ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "Resource not found");
+  if(!found || acl.resource == NULL || acl.authz == NULL){
+    ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "Resource/permission not found");
     return AUTHZ_DENIED;
   }
 
