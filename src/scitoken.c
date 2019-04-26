@@ -84,7 +84,9 @@ static const char *set_scitoken_param_iss(cmd_parms *cmd, void *config, const ch
     counter = counter - 1;
     while (counter != -1)
     {
-        domain = strtok(*(issuers+counter), ";");
+        char temp [strlen(*(issuers+counter))+1];
+        strcpy(temp,*(issuers+counter));
+        domain = strtok(temp, ";");
         res = strtok(NULL, ";");
         perm = strtok(NULL, ";");
         *(issuers+counter) = domain;
