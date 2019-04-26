@@ -151,6 +151,9 @@ int ScitokenVerify(request_rec *r, const char *require_line, const void *parsed_
   // Read in configuration
   authz_scitoken_config_rec *conf = ap_get_module_config(r->per_dir_config,
                                                       &auth_scitoken_module);
+  ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "%s",**(conf->issuers + 0));
+  ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "%s",*(conf->resources + 0));
+  ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "%s",*(conf->permissions + 0));
   int numberofissuer = conf->numberofissuer;
   char *null_ended_list[numberofissuer+1];
   
