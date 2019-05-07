@@ -137,7 +137,7 @@ int ScitokenVerify(request_rec *r, const char *require_line, const void *parsed_
   SciToken scitoken;
   char *err_msg;
   const char *auth_line, *auth_scheme;
-
+  const char* listofauthz= "COPY:write DELETE:write GET:read HEAD:read LOCK:write MKCOL:write MOVE:write OPTIONS:read POST:read PROPFIND:write PROPPATCH:write PUT:write TRACE:read UNLOCK:write";
   // Read scitoken into memory
   auth_line = apr_table_get(r->headers_in,"Authorization");
   if(auth_line == NULL){
@@ -213,6 +213,20 @@ int ScitokenVerify(request_rec *r, const char *require_line, const void *parsed_
   Acl acl;
   acl.authz = "";
   acl.resource = "";
+  //retrieve request type => acl.authz = read/write
+  char* requesttype = r->method;
+  char* authzsubstr = strstr(listofauthz,requesttype);
+  if(authzsubstr == NULL){
+    ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "Request type not supported(acl.authz)");
+    return AUTHZ_DENIED;
+  }
+  //get the requestype:read/write substring
+  char *substr = (char *)calloc(1, strchr(authzsubstr,' ') - authzsubstr + 1);
+  memcpy(substr,authzsubstr,strchr(authzsubstr,' ') - authzsubstr);
+  strtok(substr,":");
+  acl.authz = strtok(NULL,":");
+  ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "%s",substr);
+  ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "%s",acl.authz);
   //Resource is found/not found for the audience
   int found = 0;
   for(int i=0; i<conf->numberofissuer; i++){
