@@ -146,7 +146,7 @@ int ScitokenVerify(request_rec *r, const char *require_line, const void *parsed_
   }
   auth_scheme = ap_getword(r->pool, &auth_line, ' ');
 
-  // Read configuration
+  //Read configuration
   authz_scitoken_config_rec *conf = ap_get_module_config(r->per_dir_config,
 							 &auth_scitoken_module);
   int numberofissuer = conf->numberofissuer;
