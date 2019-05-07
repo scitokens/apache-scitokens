@@ -82,13 +82,12 @@ static const char *set_scitoken_param_iss(cmd_parms *cmd, void *config, const ch
     }
   conf->numberofissuer = counter;//+1;
   counter = counter - 1;
-  const char *semi = "|"; 
+  const char *bar = "|"; 
   while (counter != -1)
     {
-      domain = strtok(*(issuers+counter), semi);
-      res = strtok(NULL, semi);
-      // *(resources+counter) = res;
-      perm = strtok(NULL, semi);
+      domain = strtok(*(issuers+counter), bar);
+      res = strtok(NULL, bar);
+      perm = strtok(NULL, bar);
       *(issuers+counter) = domain;
       *(resources+counter) = res;
       *(permissions+counter) = perm;
@@ -97,7 +96,6 @@ static const char *set_scitoken_param_iss(cmd_parms *cmd, void *config, const ch
   conf->issuers = issuers;
   conf->resources = resources;
   conf->permissions = permissions;
-  //ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "%s",*resources);
   return NULL;
 }
 /**
@@ -140,7 +138,7 @@ int ScitokenVerify(request_rec *r, const char *require_line, const void *parsed_
   char *err_msg;
   const char *auth_line, *auth_scheme;
 
-  // Read in the entire scitoken into memory
+  // Read scitoken into memory
   auth_line = apr_table_get(r->headers_in,"Authorization");
   if(auth_line == NULL){
     ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "Unauthorized.");
@@ -148,7 +146,7 @@ int ScitokenVerify(request_rec *r, const char *require_line, const void *parsed_
   }
   auth_scheme = ap_getword(r->pool, &auth_line, ' ');
 
-  // Read in configuration
+  // Read configuration
   authz_scitoken_config_rec *conf = ap_get_module_config(r->per_dir_config,
 							 &auth_scitoken_module);
   int numberofissuer = conf->numberofissuer;
@@ -158,6 +156,7 @@ int ScitokenVerify(request_rec *r, const char *require_line, const void *parsed_
   ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "%s",*(conf->resources + 0));
   ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "%s",*(conf->permissions + 0));
   ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "%s","end");
+	
   //Get the list of issuers from configuration and create a null ended list of strings
   for(int i = 0; i<numberofissuer; i++){
     null_ended_list[i] = *(conf->issuers+i);
@@ -191,7 +190,6 @@ int ScitokenVerify(request_rec *r, const char *require_line, const void *parsed_
     return AUTHZ_DENIED;
   }
 
-
   //Preparing for enforcer test
   Enforcer enf;
 
@@ -215,17 +213,13 @@ int ScitokenVerify(request_rec *r, const char *require_line, const void *parsed_
   Acl acl;
   acl.authz = "";
   acl.resource = "";
-  //If a resource is found for the audience
+  //Resource is found/not found for the audience
   int found = 0;
-  //ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "%s",*conf->resources);
   for(int i=0; i<conf->numberofissuer; i++){
-    ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "%s",issuer_ptr);
-    ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "%s",*(conf->issuers + i));
     if(*(issuer_ptr) == **(conf->issuers + i))
       {
 	acl.resource = *(conf->resources + i);
 	acl.authz = *(conf->permissions + i);
-	ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "%s",*(conf->resources + i));
 	found = 1;
 	break;
       }
