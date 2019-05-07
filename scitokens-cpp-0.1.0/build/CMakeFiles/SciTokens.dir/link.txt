@@ -1,1 +1,0 @@
-/usr/bin/c++  -fPIC  -Wall -Werror -std=c++11 -Wl,--version-script=/home/yougao2/newfolder/scitokens-cpp-0.1.0/configs/export-symbols -shared -Wl,-soname,libSciTokens.so.0 -o libSciTokens.so.0.0.2 CMakeFiles/SciTokens.dir/src/scitokens.cpp.o CMakeFiles/SciTokens.dir/src/scitokens_internal.cpp.o CMakeFiles/SciTokens.dir/src/scitokens_cache.cpp.o -lcrypto -lcurl -lsqlite3 
