@@ -84,7 +84,6 @@ static const char *set_scitoken_param_iss(cmd_parms *cmd, void *config, const ch
     }
     conf->issuers = issuers;
     conf->resources = resources;
-    //ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "%s",*resources);
     return NULL;
 }
 /**
@@ -127,7 +126,7 @@ int ScitokenVerify(request_rec *r, const char *require_line, const void *parsed_
   char *err_msg;
   const char *auth_line, *auth_scheme;
   const char* listofauthz= "COPY:write DELETE:write GET:read HEAD:read LOCK:write MKCOL:write MOVE:write OPTIONS:read POST:read PROPFIND:write PROPPATCH:write PUT:write TRACE:read UNLOCK:write";
-  // Read in the entire scitoken into memory
+  // Read scitoken into memory
   auth_line = apr_table_get(r->headers_in,"Authorization");
   if(auth_line == NULL){
     ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "Unauthorized.");
@@ -135,7 +134,7 @@ int ScitokenVerify(request_rec *r, const char *require_line, const void *parsed_
   }
   auth_scheme = ap_getword(r->pool, &auth_line, ' ');
   
-  // Read in configuration
+  // Read configuration
   authz_scitoken_config_rec *conf = ap_get_module_config(r->per_dir_config,
                                                       &auth_scitoken_module);
   int numberofissuer = conf->numberofissuer;
@@ -174,14 +173,13 @@ int ScitokenVerify(request_rec *r, const char *require_line, const void *parsed_
     return AUTHZ_DENIED;
   }
   
-  
   //Preparing for enforcer test
   Enforcer enf;
   
   char hostname[1024];
   const char* aud_list[2];
   
-  // Get the hostname for the audience. It is using hostname but NOT domain name. Set your payload accordingly
+  // Get the hostname for the audience. It is using hostname(NOT domain name). Set payload accordingly
   if (gethostname(hostname, 1024) != 0) {
     ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "Failed to get hostname");
     return AUTHZ_DENIED;
@@ -210,11 +208,8 @@ int ScitokenVerify(request_rec *r, const char *require_line, const void *parsed_
   memcpy(substr,authzsubstr,strchr(authzsubstr,' ') - authzsubstr);
   strtok(substr,":");
   acl.authz = strtok(NULL,":");
-  ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "%s",substr);
-  ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "%s",acl.authz);
-  //If a resource is found for the audience
+  //Resource is found/not found for the audience
   int found = 0;
-  //ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "%s",*conf->resources);
   for(int i=0; i<conf->numberofissuer; i++){
   ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "%s",issuer_ptr);
   ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "%s",*(conf->issuers + i));
