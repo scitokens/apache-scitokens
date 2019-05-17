@@ -159,7 +159,6 @@ int ScitokenVerify(request_rec *r, const char *require_line, const void *parsed_
     return AUTHZ_DENIED;
   }
 
-  scitoken_deserialize(auth_line, &scitoken, null_ended_list, &err_msg);
   if(scitoken_deserialize(auth_line, &scitoken, null_ended_list, &err_msg)){
     ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "Failed to deserialize scitoken");
     ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, err_msg, r->uri);
