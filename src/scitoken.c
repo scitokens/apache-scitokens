@@ -126,7 +126,7 @@ authz_status ScitokenVerify(request_rec *r, const char *require_line, const void
   SciToken scitoken;
   char *err_msg;
   const char *auth_line, *auth_scheme;
-  const char* listofauthz= "COPY:write DELETE:write GET:read HEAD:read LOCK:write MKCOL:write MOVE:write OPTIONS:read POST:read PROPFIND:write PROPPATCH:write PUT:write TRACE:read UNLOCK:write";
+  const char *listofauthz= "COPY:write DELETE:write GET:read HEAD:read LOCK:write MKCOL:write MOVE:write OPTIONS:read POST:read PROPFIND:write PROPPATCH:write PUT:write TRACE:read UNLOCK:write";
   // Read scitoken into memory
   auth_line = apr_table_get(r->headers_in,"Authorization");
   if(auth_line == NULL){
@@ -166,18 +166,35 @@ authz_status ScitokenVerify(request_rec *r, const char *require_line, const void
     return AUTHZ_DENIED;
   }
   
-  char* issuer_ptr = NULL;
+  char *issuer_ptr = NULL;
+  char *sub_ptr = NULL;
+  char *aud_ptr = NULL;
+  char *scope_ptr = NULL;
+  char *wlcg_groups_ptr = NULL;
   if(scitoken_get_claim_string(scitoken, "iss", &issuer_ptr, &err_msg)) {
     ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "Failed to get issuer from token: %s\n",err_msg);
     ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, err_msg, r->uri);
     return AUTHZ_DENIED;
+  }
+  apr_table_setn(r->subprocess_env, "SCITOKEN_ISS", issuer_ptr);
+  if(!scitoken_get_claim_string(scitoken, "sub", &sub_ptr, &err_msg)) {
+    apr_table_setn(r->subprocess_env, "SCITOKEN_SUB", sub_ptr);
+  }
+  if(!scitoken_get_claim_string(scitoken, "aud", &aud_ptr, &err_msg)) {
+    apr_table_setn(r->subprocess_env, "SCITOKEN_AUD", aud_ptr);
+  }
+  if(!scitoken_get_claim_string(scitoken, "scope", &scope_ptr, &err_msg)) {
+    apr_table_setn(r->subprocess_env, "SCITOKEN_SCOPE", scope_ptr);
+  }
+  if(!scitoken_get_claim_string(scitoken, "wlcg.groups", &wlcg_groups_ptr, &err_msg)) {
+    apr_table_setn(r->subprocess_env, "SCITOKEN_WLCG_GROUPS", wlcg_groups_ptr);
   }
   
   //Preparing for enforcer test
   Enforcer enf;
   
   char hostname[1024];
-  const char* aud_list[2];
+  const char *aud_list[2];
   
   // Get the hostname for the audience. It is using hostname(NOT domain name). Set payload accordingly
   if (gethostname(hostname, 1024) != 0) {
@@ -197,8 +214,8 @@ authz_status ScitokenVerify(request_rec *r, const char *require_line, const void
   acl.authz = "";
   acl.resource = "";
   //retrieve request type => acl.authz = read/write
-  const char* requesttype = r->method;
-  char* authzsubstr = strstr(listofauthz,requesttype);
+  const char *requesttype = r->method;
+  char *authzsubstr = strstr(listofauthz,requesttype);
   if(authzsubstr == NULL){
     ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "Request type not supported(acl.authz)");
     return AUTHZ_DENIED;
