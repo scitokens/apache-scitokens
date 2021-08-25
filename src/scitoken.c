@@ -8,7 +8,7 @@
 #include "apr_strings.h"
 #include "apr_time.h"
 
-#include <scitokens-cpp/src/scitokens.h>
+#include <scitokens/scitokens.h>
 
 #include <unistd.h>
 
@@ -47,6 +47,7 @@ static void *merge_auth_scitoken_dir_config(apr_pool_t *p, void *basev, void *ne
     newconf->numberofissuer = new_conf->numberofissuer ? new_conf->numberofissuer : base->numberofissuer;
     newconf->issuers = new_conf->issuers ? new_conf->issuers : base->issuers;
     newconf->resources = new_conf->resources ? new_conf->resources : base->resources;
+    return newconf;
 }
 
 /**
@@ -121,7 +122,7 @@ module AP_MODULE_DECLARE_DATA auth_scitoken_module;
 /**
  * The main function to verify a Scitoken
  */
-int ScitokenVerify(request_rec *r, const char *require_line, const void *parsed_require_line) {
+authz_status ScitokenVerify(request_rec *r, const char *require_line, const void *parsed_require_line) {
   SciToken scitoken;
   char *err_msg;
   const char *auth_line, *auth_scheme;
@@ -159,7 +160,7 @@ int ScitokenVerify(request_rec *r, const char *require_line, const void *parsed_
     return AUTHZ_DENIED;
   }
 
-  if(scitoken_deserialize(auth_line, &scitoken, null_ended_list, &err_msg)){
+  if(scitoken_deserialize(auth_line, &scitoken, (char const * const *) null_ended_list, &err_msg)){
     ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "Failed to deserialize scitoken");
     ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, err_msg, r->uri);
     return AUTHZ_DENIED;
@@ -196,7 +197,7 @@ int ScitokenVerify(request_rec *r, const char *require_line, const void *parsed_
   acl.authz = "";
   acl.resource = "";
   //retrieve request type => acl.authz = read/write
-  char* requesttype = r->method;
+  const char* requesttype = r->method;
   char* authzsubstr = strstr(listofauthz,requesttype);
   if(authzsubstr == NULL){
     ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "Request type not supported(acl.authz)");
@@ -238,6 +239,8 @@ int ScitokenVerify(request_rec *r, const char *require_line, const void *parsed_
   char *str = malloc(strlen("token") + strlen(auth_line) + 1);
   strcpy(str, "token");
   strcat(str, auth_line);
+
+  
   
   // log the access
   ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, str, r->uri);
