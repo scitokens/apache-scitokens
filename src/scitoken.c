@@ -96,6 +96,23 @@ static const char *set_scitoken_param_exp(cmd_parms *cmd, void *config, const ch
 {
     return NULL;
 }
+
+static int enforcing_flag = 1;
+static char audience[255];
+
+static const char *set_scitoken_param_audience(cmd_parms *cmd, void *config, const char *aud)
+{
+    strncpy(audience, aud, 255);
+    return NULL;
+}
+
+static const char *set_scitoken_param_enforcing(cmd_parms *cmd, void *config, const char *flag)
+{
+    if (flag[0] == 'f' || flag[0] == 'F' || flag[0] == 'n' || flag[0] == 'N'|| flag[0] == '0') {
+        enforcing_flag = 0;
+    }
+    return NULL;
+}
 /**
  * This function takes the argument "alg" from the Apache configuration file
  * , parses the directive and sets the (module) configuration accordingly
@@ -111,6 +128,8 @@ static const command_rec authz_scitoken_cmds[] =
 AP_INIT_TAKE1("issuers", set_scitoken_param_iss, NULL, OR_AUTHCFG, "list of issuers"),
 AP_INIT_TAKE1("exp", set_scitoken_param_exp, NULL, OR_AUTHCFG, "Enable exp time validation"),
 AP_INIT_TAKE1("alg", set_scitoken_param_alg, NULL, OR_AUTHCFG, "Enable algorithm validation"),
+AP_INIT_TAKE1("enforcing", set_scitoken_param_enforcing, NULL, OR_AUTHCFG, "Enable/disable enforcer, default on"),
+AP_INIT_TAKE1("audience", set_scitoken_param_audience, NULL, OR_AUTHCFG, "set audience"),
         {NULL}
 };
 
@@ -171,97 +190,105 @@ authz_status ScitokenVerify(request_rec *r, const char *require_line, const void
   char *aud_ptr = NULL;
   char *scope_ptr = NULL;
   char *wlcg_groups_ptr = NULL;
+  if(!scitoken_get_claim_string(scitoken, "sub", &sub_ptr, &err_msg)) {
+    apr_table_set(r->subprocess_env, "SCITOKEN_SUB", sub_ptr);
+  }
+  if(!scitoken_get_claim_string(scitoken, "aud", &aud_ptr, &err_msg)) {
+    apr_table_set(r->subprocess_env, "SCITOKEN_AUD", aud_ptr);
+  }
+  if(!scitoken_get_claim_string(scitoken, "scope", &scope_ptr, &err_msg)) {
+    apr_table_set(r->subprocess_env, "SCITOKEN_SCOPE", scope_ptr);
+  }
+  if(!scitoken_get_claim_string(scitoken, "wlcg.groups", &wlcg_groups_ptr, &err_msg)) {
+    apr_table_set(r->subprocess_env, "SCITOKEN_WLCG_GROUPS", wlcg_groups_ptr);
+  }
   if(scitoken_get_claim_string(scitoken, "iss", &issuer_ptr, &err_msg)) {
     ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "Failed to get issuer from token: %s\n",err_msg);
     ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, err_msg, r->uri);
     return AUTHZ_DENIED;
   }
-  apr_table_setn(r->subprocess_env, "SCITOKEN_ISS", issuer_ptr);
-  if(!scitoken_get_claim_string(scitoken, "sub", &sub_ptr, &err_msg)) {
-    apr_table_setn(r->subprocess_env, "SCITOKEN_SUB", sub_ptr);
-  }
-  if(!scitoken_get_claim_string(scitoken, "aud", &aud_ptr, &err_msg)) {
-    apr_table_setn(r->subprocess_env, "SCITOKEN_AUD", aud_ptr);
-  }
-  if(!scitoken_get_claim_string(scitoken, "scope", &scope_ptr, &err_msg)) {
-    apr_table_setn(r->subprocess_env, "SCITOKEN_SCOPE", scope_ptr);
-  }
-  if(!scitoken_get_claim_string(scitoken, "wlcg.groups", &wlcg_groups_ptr, &err_msg)) {
-    apr_table_setn(r->subprocess_env, "SCITOKEN_WLCG_GROUPS", wlcg_groups_ptr);
-  }
+  apr_table_set(r->subprocess_env, "SCITOKEN_ISS", issuer_ptr);
   
   //Preparing for enforcer test
   Enforcer enf;
   
   char hostname[1024];
   const char *aud_list[2];
-  
-  // Get the hostname for the audience. It is using hostname(NOT domain name). Set payload accordingly
-  if (gethostname(hostname, 1024) != 0) {
-    ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "Failed to get hostname");
-    return AUTHZ_DENIED;
-  }
-  aud_list[0] = hostname;
-  aud_list[1] = NULL;
 
-  if (!(enf = enforcer_create(issuer_ptr, aud_list, &err_msg))) {
-    ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "Failed to create enforcer");
-    ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "%s", err_msg);
-    return AUTHZ_DENIED;
-  }
-  
-  Acl acl;
-  acl.authz = "";
-  acl.resource = "";
-  //retrieve request type => acl.authz = read/write
-  const char *requesttype = r->method;
-  char *authzsubstr = strstr(listofauthz,requesttype);
-  if(authzsubstr == NULL){
-    ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "Request type not supported(acl.authz)");
-    return AUTHZ_DENIED;
-  }
-  //get the requestype:read/write substring
-  char *substr = (char *)calloc(1, strchr(authzsubstr,' ') - authzsubstr + 1);
-  memcpy(substr,authzsubstr,strchr(authzsubstr,' ') - authzsubstr);
-  strtok(substr,":");
-  acl.authz = strtok(NULL,":");
-  //Resource is found/not found for the audience
-  int found = 0;
-  for(int i=0; i<conf->numberofissuer; i++){
-  ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "%s",issuer_ptr);
-  ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "%s",*(conf->issuers + i));
-  if(*(issuer_ptr) == **(conf->issuers + i))
-    {
-    acl.resource = *(conf->resources + i);
-    ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "%s",*(conf->resources + i));
-    found = 1;
-    break;
+  if ( audience[0] ) {
+    aud_list[0] = audience;
+  } else  {
+    // Get the hostname for the audience. It is using hostname(NOT domain name). Set payload accordingly
+    if (gethostname(hostname, 1024) != 0) {
+      ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "Failed to get hostname");
+      return AUTHZ_DENIED;
     }
+    aud_list[0] = hostname;
   }
-  if(!found){
-    ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "Resource not found");
-    return AUTHZ_DENIED;
+  aud_list[1] = NULL;
+  ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "Using audience:");
+  ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, aud_list[0]);
+  
+  if (enforcing_flag) {
+    ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "enforcing_flag on..");
+
+    if (!(enf = enforcer_create(issuer_ptr, aud_list, &err_msg))) {
+      ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "Failed to create enforcer: %s", err_msg);
+      return AUTHZ_DENIED;
+    }
+    
+    Acl acl;
+    acl.authz = "";
+    acl.resource = "";
+    //retrieve request type => acl.authz = read/write
+    const char *requesttype = r->method;
+    char *authzsubstr = strstr(listofauthz,requesttype);
+    if(authzsubstr == NULL){
+      ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "Request type not supported(acl.authz)");
+      return AUTHZ_DENIED;
+    }
+    //get the requestype:read/write substring
+    char *substr = (char *)calloc(1, strchr(authzsubstr,' ') - authzsubstr + 1);
+    memcpy(substr,authzsubstr,strchr(authzsubstr,' ') - authzsubstr);
+    strtok(substr,":");
+    acl.authz = strtok(NULL,":");
+    //Resource is found/not found for the audience
+    int found = 0;
+    for(int i=0; i<conf->numberofissuer; i++){
+    ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "%s",issuer_ptr);
+    ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "%s",*(conf->issuers + i));
+    if(*(issuer_ptr) == **(conf->issuers + i))
+      {
+      acl.resource = *(conf->resources + i);
+      ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "%s",*(conf->resources + i));
+      found = 1;
+      break;
+      }
+    }
+    if(!found){
+      ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "Resource not found");
+      return AUTHZ_DENIED;
+    }
+    
+    if( enforcer_test(enf, scitoken, &acl, &err_msg)) {
+      ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "Failed enforcer test: %s", err_msg);
+      enforcer_destroy(enf);
+      return AUTHZ_DENIED;
+    } else {
+      ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "enforcer_tested..");
+      enforcer_destroy(enf);
+    }
+
   }
 
-  
-  if (enforcer_test(enf, scitoken, &acl, &err_msg)) {
-    ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "Failed enforcer test");
-    ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "%s", err_msg);
-    ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "%s", hostname);
-    ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "%s", null_ended_list[0]);
-    return AUTHZ_DENIED;
-  }
-  
   // +1 for the null-terminator
-  char *str = malloc(strlen("token") + strlen(auth_line) + 1);
-  strcpy(str, "token");
+  char *str = apr_palloc(r->pool, strlen("token:") + strlen(auth_line) + 1);
+  strcpy(str, "token:");
   strcat(str, auth_line);
-
-  
   
   // log the access
   ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, str, r->uri);
-  free(str);
+  
   return AUTHZ_GRANTED;
   
 }
