@@ -98,7 +98,7 @@ static const char *set_scitoken_param_exp(cmd_parms *cmd, void *config, const ch
 }
 
 static int enforcing_flag = 1;
-static char audience[255];
+static char audience[255] = "";
 
 static const char *set_scitoken_param_audience(cmd_parms *cmd, void *config, const char *aud)
 {
@@ -110,6 +110,8 @@ static const char *set_scitoken_param_enforcing(cmd_parms *cmd, void *config, co
 {
     if (flag[0] == 'f' || flag[0] == 'F' || flag[0] == 'n' || flag[0] == 'N'|| flag[0] == '0') {
         enforcing_flag = 0;
+    } else {
+        enforcing_flag = 1;
     }
     return NULL;
 }
