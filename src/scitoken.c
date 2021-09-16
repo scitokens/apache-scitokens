@@ -16,10 +16,14 @@
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~  CONFIGURATION STRUCTURE ~~~~~~~~~~~~~~~~~~~~~~~~~  */
 
+#define MAX_AUD 20
 typedef struct {
-char** issuers;
-char** resources;
-int numberofissuer;
+	char** issuers;
+	char** resources;
+	int numberofissuer;
+	int enforcing_flag;
+	char audience_buf[255];
+	char *aud_list[MAX_AUD+1];
 } authz_scitoken_config_rec;
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~  DEFAULT CONFIGURATION ~~~~~~~~~~~~~~~~~~~~~~~~~~  */
@@ -28,10 +32,12 @@ static void *create_authz_scitoken_dir_config(apr_pool_t *p, char *d)
 {
     authz_scitoken_config_rec *conf = apr_palloc(p, sizeof(*conf));
     
+    /* ap_log_error(APLOG_MARK, APLOG_NOTICE, 0, NULL, "scitoken: new config allocation"); */
     char** issuers = calloc(1, sizeof(char*));
     char**resources = calloc(1, sizeof(char*));
     *(issuers) = "issuer";
     *(resources) = "resources";
+    conf->audience_buf[0] = 0;
     conf->numberofissuer = 1;
     conf->issuers = issuers;
     conf->resources = resources;
@@ -41,12 +47,15 @@ static void *create_authz_scitoken_dir_config(apr_pool_t *p, char *d)
 //The default is to overwrite the old config, NOT merging
 static void *merge_auth_scitoken_dir_config(apr_pool_t *p, void *basev, void *new_confv)
 {
+    /* ap_log_error(APLOG_MARK, APLOG_NOTICE, 0, NULL, "scitoken: merging...");*/
     authz_scitoken_config_rec *newconf = apr_pcalloc(p, sizeof(*newconf));
     authz_scitoken_config_rec *base = basev;
     authz_scitoken_config_rec *new_conf = new_confv;
+    memcpy(newconf, new_conf, sizeof(authz_scitoken_config_rec));
     newconf->numberofissuer = new_conf->numberofissuer ? new_conf->numberofissuer : base->numberofissuer;
     newconf->issuers = new_conf->issuers ? new_conf->issuers : base->issuers;
     newconf->resources = new_conf->resources ? new_conf->resources : base->resources;
+    newconf->enforcing_flag = new_conf->enforcing_flag;
     return newconf;
 }
 
@@ -58,6 +67,7 @@ static void *merge_auth_scitoken_dir_config(apr_pool_t *p, void *basev, void *ne
  */
 static const char *set_scitoken_param_iss(cmd_parms *cmd, void *config, const char *issuersstr)
 {
+    /* ap_log_error(APLOG_MARK, APLOG_NOTICE, 0, NULL, "scitoken: issuer %s"  , issuersstr); */
     authz_scitoken_config_rec *conf = (authz_scitoken_config_rec *)config;
     char *token = strtok((char *)issuersstr, ",");
     char *res;
@@ -94,24 +104,46 @@ static const char *set_scitoken_param_iss(cmd_parms *cmd, void *config, const ch
  */
 static const char *set_scitoken_param_exp(cmd_parms *cmd, void *config, const char *issuersstr)
 {
+    /* ap_log_error(APLOG_MARK, APLOG_NOTICE, 0, NULL, "scitoken: exp %s"  , issuersstr); */
     return NULL;
 }
 
-static int enforcing_flag = 1;
-static char audience[255] = "";
 
 static const char *set_scitoken_param_audience(cmd_parms *cmd, void *config, const char *aud)
 {
-    strncpy(audience, aud, 255);
+    authz_scitoken_config_rec *conf = config;
+    int k = 1;
+    char *pc = conf->audience_buf+1;
+
+    /* ap_log_error(APLOG_MARK, APLOG_NOTICE, 0, NULL, "scitoken audience: %s", aud); */
+    strncpy(conf->audience_buf, aud, 255);
+
+    conf->aud_list[0] = conf->audience_buf;
+    conf->aud_list[1] = NULL;
+    while(*pc && k < MAX_AUD) {
+      if(*pc == ',') {
+        *pc = 0;
+        conf->aud_list[k++] = ++pc;
+        conf->aud_list[k] = 0;
+      } else {
+        pc++;
+      }
+    }
+    /* ap_log_error(APLOG_MARK, APLOG_NOTICE, 0, NULL, "Done splitting audience"); */
     return NULL;
 }
 
 static const char *set_scitoken_param_enforcing(cmd_parms *cmd, void *config, const char *flag)
 {
+    /* ap_log_error(APLOG_MARK, APLOG_NOTICE, 0, NULL, "scitoken enforcing: %s", flag); */
+    authz_scitoken_config_rec *conf = config;
+
+    /* ap_log_error(APLOG_MARK, APLOG_NOTICE, 0, NULL, "Setting enforcing: flag: %s", flag); */
+
     if (flag[0] == 'f' || flag[0] == 'F' || flag[0] == 'n' || flag[0] == 'N'|| flag[0] == '0') {
-        enforcing_flag = 0;
+        conf->enforcing_flag = 0;
     } else {
-        enforcing_flag = 1;
+        conf->enforcing_flag = 1;
     }
     return NULL;
 }
@@ -149,11 +181,16 @@ authz_status ScitokenVerify(request_rec *r, const char *require_line, const void
   const char *auth_line, *auth_scheme;
   const char *listofauthz= "COPY:write DELETE:write GET:read HEAD:read LOCK:write MKCOL:write MOVE:write OPTIONS:read POST:read PROPFIND:write PROPPATCH:write PUT:write TRACE:read UNLOCK:write";
   // Read scitoken into memory
+
+  /* ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "starting token auth:"); */
+
   auth_line = apr_table_get(r->headers_in,"Authorization");
   if(auth_line == NULL){
     ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "Unauthorized.");
     return AUTHZ_DENIED;
   }
+  /* ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "Found authorization header"); */
+
   auth_scheme = ap_getword(r->pool, &auth_line, ' ');
   
   // Read configuration
@@ -168,10 +205,12 @@ authz_status ScitokenVerify(request_rec *r, const char *require_line, const void
   }
   null_ended_list[numberofissuer] = NULL;
   
+
   if (strcasecmp(auth_scheme, "Bearer")){
     ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "Wrong scheme");
     return AUTHZ_DENIED;
   }
+  /* ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "Checked scheme.."); */
 
   while (apr_isspace(*auth_line)) {
     auth_line++;
@@ -187,6 +226,8 @@ authz_status ScitokenVerify(request_rec *r, const char *require_line, const void
     return AUTHZ_DENIED;
   }
   
+  int i;
+  /* int k; */
   char *issuer_ptr = NULL;
   char *sub_ptr = NULL;
   char *aud_ptr = NULL;
@@ -213,26 +254,42 @@ authz_status ScitokenVerify(request_rec *r, const char *require_line, const void
   
   //Preparing for enforcer test
   Enforcer enf;
-  
-  char hostname[1024];
-  const char *aud_list[2];
 
-  if ( audience[0] ) {
-    aud_list[0] = audience;
+  char hostname[1024];
+  char *host_aud_list[2];
+  const char **aud_list;
+
+  
+  /* ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "Audience buf: %s" , conf->audience_buf); */
+  if ( conf->audience_buf[0] ) {
+    /* k = 1; */
+    aud_list = (const char **)conf->aud_list;
+    for (i = 0; i < MAX_AUD; i++) {
+        if (aud_list[i] == 0) {
+           /* k = i; */
+           break;
+        }
+    }
   } else  {
+    aud_list = (const char **)host_aud_list;
     // Get the hostname for the audience. It is using hostname(NOT domain name). Set payload accordingly
     if (gethostname(hostname, 1024) != 0) {
       ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "Failed to get hostname");
       return AUTHZ_DENIED;
     }
     aud_list[0] = hostname;
+    aud_list[1] = NULL;
+    /* k = 1; */
   }
-  aud_list[1] = NULL;
-  ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "Using audience:");
-  ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, aud_list[0]);
+  /* 
+   * ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "Using audience:");
+   * for(i = 0; i < k ; i++) {
+   *     ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "%d: %s" , i, aud_list[i]);
+   * }
+   */
   
-  if (enforcing_flag) {
-    ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "enforcing_flag on..");
+  if (conf->enforcing_flag) {
+    /* ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "enforcing_flag on.."); */
 
     if (!(enf = enforcer_create(issuer_ptr, aud_list, &err_msg))) {
       ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "Failed to create enforcer: %s", err_msg);
@@ -281,6 +338,9 @@ authz_status ScitokenVerify(request_rec *r, const char *require_line, const void
       enforcer_destroy(enf);
     }
 
+  /* } else {
+   * ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "enforcing_flag off.."); 
+   */
   }
 
   // +1 for the null-terminator
@@ -289,7 +349,7 @@ authz_status ScitokenVerify(request_rec *r, const char *require_line, const void
   strcat(str, auth_line);
   
   // log the access
-  ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, str, r->uri);
+  /* ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, str, r->uri); */
   
   return AUTHZ_GRANTED;
   
@@ -318,8 +378,8 @@ AP_DECLARE_MODULE(auth_scitoken) =
   STANDARD20_MODULE_STUFF,
   create_authz_scitoken_dir_config, /* dir config creater */
   merge_auth_scitoken_dir_config,   /* dir merger(overwrite) */
-  NULL,                             /* server config */
-  NULL,                             /* merge server config */
+  create_authz_scitoken_dir_config, /* server config */
+  merge_auth_scitoken_dir_config,   /* merge server config */
   authz_scitoken_cmds,              /* command apr_table_t */
   register_hooks                    /* register hooks */
 };
