@@ -65,8 +65,6 @@ To make a 200 request:
 
 1.Go to https://demo.scitokens.org Set payload to protected area
 
-2."scp": "read:/demo", "aud": "Vt20",
+2."scope": "read:/demo", "aud": "https://server.example.com",
 
-3.Change "scp" to "scope"
-
-4.curl -H "Authorization: Bearer YOURTOKEN" http://Vt20.security.ncsa.illinois.edu/demo/index2.html
+3.curl -H "Authorization: Bearer YOURTOKEN" https://server.example.com/demo/index2.html
